@@ -72,7 +72,7 @@ jobs:
         run: |
           cd dist
           npm version ${{ github.event.inputs.version }} --no-git-tag-version
-          NEW_VERSION=$(node -p "require('./package.json').version")
+          NEW_VERSION=$(node -p "require('../package.json').version")
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
           cd ..
           git add .
@@ -82,6 +82,7 @@ jobs:
 
       - name: Publish to npm
         run: |
+          cp package.json dist/package.json
           cd dist
           npm publish --provenance --access public
         env:
@@ -99,7 +100,5 @@ jobs:
             ## Changes
 
             * Version bump to ${{ env.NEW_VERSION }}
-
-            See [CHANGELOG.md](./CHANGELOG.md) for more details.
           draft: false
           prerelease: false
