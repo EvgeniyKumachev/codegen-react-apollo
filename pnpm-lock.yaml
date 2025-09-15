@@ -39,7 +39,6 @@ importers:
       graphql-tag:
         specifier: ^2.12.6
         version: 2.12.6(graphql@16.11.0)
-    publishDirectory: dist
 
 packages:
 
