@@ -55,4 +55,4 @@ jobs:
           echo "Checking ESM build:"
           ls -la dist/esm/
           echo "Checking TypeScript definitions:"
-          ls -la dist/typings/
+          ls -la dist/types/
