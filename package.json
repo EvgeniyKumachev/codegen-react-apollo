@@ -15,7 +15,7 @@
     ".": {
       "require": {
         "types": "./dist/types/index.d.cts",
-        "default": "./dist/cjs/index.cjs"
+        "default": "./dist/cjs/index.js"
       },
       "import": {
         "types": "./dist/types/index.d.ts",
