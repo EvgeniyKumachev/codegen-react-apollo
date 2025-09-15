@@ -1,0 +1,62 @@
+{
+  "name": "graphql-codegen-typescript-react-apollo-v4",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fork of @graphql-codegen/typescript-react-apollo with support for Apollo Client 4",
+  "license": "MIT",
+  "author": "EvgeniyKumachev",
+  "engines": {
+    "node": ">= 16.0.0"
+  },
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/types/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
+      },
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "default": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "typings": "dist/types/index.d.ts",
+  "typescript": {
+    "definition": "dist/types/index.d.ts"
+  },
+  "peerDependencies": {
+    "graphql": "^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0"
+  },
+  "dependencies": {
+    "@graphql-codegen/plugin-helpers": "^3.0.0",
+    "@graphql-codegen/visitor-plugin-common": "2.13.8",
+    "auto-bind": "~4.0.0",
+    "change-case-all": "1.0.15",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@graphql-codegen/testing": "1.18.3",
+    "@tsconfig/recommended": "^1.0.10",
+    "@types/node": "22.15.29",
+    "graphql-tag": "^2.12.6"
+  },
+  "scripts": {
+    "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\":\"module\"}' > dist/esm/package.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "build": "pnpm run build:cjs && npm run build:esm && npm run build:types",
+    "prepublish": "pnpm run build"
+  },
+  "packageManager": "pnpm@10.8.0",
+  "publishConfig": {
+    "directory": "dist",
+    "access": "public"
+  }
+}

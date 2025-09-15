@@ -1,0 +1,483 @@
+import autoBind from "auto-bind";
+import { camelCase, pascalCase } from "change-case-all";
+import { GraphQLSchema, Kind, OperationDefinitionNode } from "graphql";
+import { Types } from "@graphql-codegen/plugin-helpers";
+import {
+  ClientSideBasePluginConfig,
+  ClientSideBaseVisitor,
+  DocumentMode,
+  getConfigValue,
+  LoadedFragment,
+} from "@graphql-codegen/visitor-plugin-common";
+import {
+  ReactApolloPluginConfigDefaultBaseOptions,
+  ReactApolloRawPluginConfig,
+} from "./config.js";
+
+const APOLLO_CLIENT_UNIFIED_PACKAGE = `@apollo/client`;
+
+export interface ReactApolloPluginConfig extends ClientSideBasePluginConfig {
+  withMutationFn: boolean;
+  withRefetchFn: boolean;
+  withFragmentHooks?: boolean;
+  apolloReactHooksImportFrom: string;
+  withResultType: boolean;
+  withMutationOptionsType: boolean;
+  addDocBlocks: boolean;
+  defaultBaseOptions: ReactApolloPluginConfigDefaultBaseOptions;
+  hooksSuffix: string;
+}
+
+function hasRequiredVariables(node: OperationDefinitionNode): boolean {
+  return (
+    node.variableDefinitions?.some(
+      (variableDef) =>
+        variableDef.type.kind === Kind.NON_NULL_TYPE &&
+        !variableDef.defaultValue
+    ) ?? false
+  );
+}
+
+export class ReactApolloVisitor extends ClientSideBaseVisitor<
+  ReactApolloRawPluginConfig,
+  ReactApolloPluginConfig
+> {
+  private _externalImportPrefix: string;
+  private imports = new Set<string>();
+
+  constructor(
+    schema: GraphQLSchema,
+    fragments: LoadedFragment[],
+    protected rawConfig: ReactApolloRawPluginConfig,
+    documents: Types.DocumentFile[]
+  ) {
+    super(schema, fragments, rawConfig, {
+      withMutationFn: getConfigValue(rawConfig.withMutationFn, true),
+      withRefetchFn: getConfigValue(rawConfig.withRefetchFn, false),
+      withFragmentHooks: getConfigValue(rawConfig.withFragmentHooks, false),
+      apolloReactHooksImportFrom: getConfigValue(
+        rawConfig.apolloReactHooksImportFrom,
+        APOLLO_CLIENT_UNIFIED_PACKAGE
+      ),
+      withResultType: getConfigValue(rawConfig.withResultType, true),
+      withMutationOptionsType: getConfigValue(
+        rawConfig.withMutationOptionsType,
+        true
+      ),
+      addDocBlocks: getConfigValue(rawConfig.addDocBlocks, true),
+      defaultBaseOptions: getConfigValue(rawConfig.defaultBaseOptions, {}),
+      gqlImport: getConfigValue(
+        rawConfig.gqlImport,
+        `${APOLLO_CLIENT_UNIFIED_PACKAGE}#gql`
+      ),
+      hooksSuffix: getConfigValue(rawConfig.hooksSuffix, ""),
+    });
+
+    this._externalImportPrefix = this.config.importOperationTypesFrom
+      ? `${this.config.importOperationTypesFrom}.`
+      : "";
+    this._documents = documents;
+
+    autoBind(this);
+  }
+
+  private getImportStatement(isTypeImport: boolean): string {
+    return isTypeImport && this.config.useTypeImports
+      ? "import type"
+      : "import";
+  }
+
+  private getApolloReactHooksImport(isTypeImport: boolean): string {
+    return `${this.getImportStatement(
+      isTypeImport
+    )} * as ApolloReactHooks from '${this.config.apolloReactHooksImportFrom}';`;
+  }
+
+  private getDefaultOptions(): string {
+    return `const defaultOptions = ${JSON.stringify(
+      this.config.defaultBaseOptions
+    )} as const;`;
+  }
+
+  private getDocumentNodeVariable(
+    node: OperationDefinitionNode,
+    documentVariableName: string
+  ): string {
+    return this.config.documentMode === DocumentMode.external
+      ? `Operations.${node.name?.value ?? ""}`
+      : documentVariableName;
+  }
+
+  public getImports(): string[] {
+    const baseImports = super.getImports();
+    const hasOperations = this._collectedOperations.length > 0;
+
+    if (!hasOperations && !this.config.withFragmentHooks) {
+      return baseImports;
+    }
+
+    if (this.config.withFragmentHooks) {
+      return [
+        ...baseImports,
+        this.getApolloReactHooksImport(false),
+        ...Array.from(this.imports),
+      ];
+    }
+
+    return [...baseImports, ...Array.from(this.imports)];
+  }
+
+  private _buildMutationFn(
+    node: OperationDefinitionNode,
+    operationResultType: string,
+    operationVariablesTypes: string
+  ) {
+    if (node.operation === "mutation") {
+      return `export type ${this.convertName(
+        (node.name?.value ?? "") + "MutationFn"
+      )} = ApolloReactHooks.useMutation.MutationFunction<${operationResultType}, ${operationVariablesTypes}>;`;
+    }
+    return null;
+  }
+
+  private _buildHooksJSDoc(
+    node: OperationDefinitionNode,
+    operationName: string,
+    operationType: string
+  ): string {
+    const variableString = node.variableDefinitions?.reduce((acc, item) => {
+      const name = item.variable.name.value;
+
+      return `${acc}\n *      ${name}: // value for '${name}'`;
+    }, "");
+
+    const queryDescription = `
+ * To run a query within a React component, call \`use${operationName}\` and pass it any options that fit your needs.
+ * When your component renders, \`use${operationName}\` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.`;
+
+    const queryExample = `
+ * const { data, loading, error } = use${operationName}({
+ *   variables: {${variableString}
+ *   },
+ * });`;
+
+    const mutationDescription = `
+ * To run a mutation, you first call \`use${operationName}\` within a React component and pass it any options that fit your needs.
+ * When your component renders, \`use${operationName}\` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution`;
+
+    const mutationExample = `
+ * const [${camelCase(
+   operationName
+ )}, { data, loading, error }] = use${operationName}({
+ *   variables: {${variableString}
+ *   },
+ * });`;
+
+    return `
+/**
+ * __use${operationName}__
+ *${operationType === "Mutation" ? mutationDescription : queryDescription}
+ *
+ * @param baseOptions options that will be passed into the ${operationType.toLowerCase()}, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#${
+      operationType === "Mutation" ? "options-2" : "options"
+    };
+ *
+ * @example${operationType === "Mutation" ? mutationExample : queryExample}
+ */`;
+  }
+
+  private _buildHooks(
+    node: OperationDefinitionNode,
+    operationType: string,
+    documentVariableName: string,
+    operationResultType: string,
+    operationVariablesTypes: string,
+    hasRequiredVariables: boolean
+  ): string {
+    const nodeName = node.name?.value ?? "";
+    const suffix = this._getHookSuffix(nodeName, operationType);
+    const shouldEnforceRequiredVariables =
+      hasRequiredVariables && operationType !== "Mutation";
+    const operationName: string =
+      this.convertName(nodeName, {
+        suffix,
+        useTypesPrefix: false,
+        useTypesSuffix: false,
+      }) + this.config.hooksSuffix;
+
+    this.imports.add(this.getApolloReactHooksImport(true));
+    this.imports.add(this.getApolloReactHooksImport(false));
+    this.imports.add(this.getDefaultOptions());
+    const hookFns = [
+      `export function use${operationName}(baseOptions${
+        shouldEnforceRequiredVariables ? "" : "?"
+      }: ApolloReactHooks.use${operationType}.Options<${operationResultType}, ${operationVariablesTypes}>${
+        !shouldEnforceRequiredVariables
+          ? ""
+          : ` & ({ variables: ${operationVariablesTypes}; skip?: boolean; } | { skip: boolean; }) `
+      }) {
+        const options = {...defaultOptions, ...baseOptions}
+        return ApolloReactHooks.use${operationType}<${operationResultType}, ${operationVariablesTypes}>(${this.getDocumentNodeVariable(
+        node,
+        documentVariableName
+      )}, options);
+      }`,
+    ];
+
+    if (this.config.addDocBlocks) {
+      hookFns.unshift(
+        this._buildHooksJSDoc(node, operationName, operationType)
+      );
+    }
+
+    const hookResults = [
+      `export type ${operationName}HookResult = ReturnType<typeof use${operationName}>;`,
+    ];
+
+    if (operationType === "Query") {
+      const lazyOperationName: string =
+        this.convertName(nodeName, {
+          suffix: pascalCase("LazyQuery"),
+          useTypesPrefix: false,
+        }) + this.config.hooksSuffix;
+      hookFns.push(
+        `export function use${lazyOperationName}(baseOptions?: ApolloReactHooks.useLazyQuery.Options<${operationResultType}, ${operationVariablesTypes}>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return ApolloReactHooks.useLazyQuery<${operationResultType}, ${operationVariablesTypes}>(${this.getDocumentNodeVariable(
+          node,
+          documentVariableName
+        )}, options);
+        }`
+      );
+      hookResults.push(
+        `export type ${lazyOperationName}HookResult = ReturnType<typeof use${lazyOperationName}>;`
+      );
+
+      const suspenseOperationName: string =
+        this.convertName(nodeName, {
+          suffix: pascalCase("SuspenseQuery"),
+          useTypesPrefix: false,
+        }) + this.config.hooksSuffix;
+
+      hookFns.push(
+        `export function use${suspenseOperationName}(baseOptions?: ApolloReactHooks.SkipToken | ApolloReactHooks.useSuspenseQuery.Options<${operationVariablesTypes}>) {
+          const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return ApolloReactHooks.useSuspenseQuery<${operationResultType}, ${operationVariablesTypes}>(${this.getDocumentNodeVariable(
+          node,
+          documentVariableName
+        )}, options);
+        }`
+      );
+      hookResults.push(
+        `export type ${suspenseOperationName}HookResult = ReturnType<typeof use${suspenseOperationName}>;`
+      );
+    }
+
+    return [...hookFns, ...hookResults].join("\n");
+  }
+
+  private _getHookSuffix(name: string, operationType: string) {
+    if (this.config.omitOperationSuffix) {
+      return "";
+    }
+    if (!this.config.dedupeOperationSuffix) {
+      return pascalCase(operationType);
+    }
+    if (
+      name.includes("Query") ||
+      name.includes("Mutation") ||
+      name.includes("Subscription")
+    ) {
+      return "";
+    }
+    return pascalCase(operationType);
+  }
+
+  private _buildResultType(
+    node: OperationDefinitionNode,
+    operationType: string,
+    operationResultType: string,
+    operationVariablesTypes: string
+  ): string {
+    const componentResultType = this.convertName(node.name?.value ?? "", {
+      suffix: `${operationType}Result`,
+      useTypesPrefix: false,
+    });
+
+    switch (node.operation) {
+      case "query":
+        this.imports.add(this.getApolloReactHooksImport(true));
+        return `export type ${componentResultType} = ApolloReactHooks.useQuery.Result<${operationResultType}, ${operationVariablesTypes}>;`;
+      case "mutation":
+        this.imports.add(this.getApolloReactHooksImport(true));
+        return `export type ${componentResultType} = ApolloReactHooks.useMutation.Result<${operationResultType}>;`;
+      case "subscription":
+        this.imports.add(this.getApolloReactHooksImport(true));
+        return `export type ${componentResultType} = ApolloReactHooks.useSubscription.Result<${operationResultType}>;`;
+      default:
+        return "";
+    }
+  }
+
+  private _buildWithMutationOptionsType(
+    node: OperationDefinitionNode,
+    operationResultType: string,
+    operationVariablesTypes: string
+  ): string {
+    if (node.operation !== "mutation") {
+      return "";
+    }
+
+    this.imports.add(this.getApolloReactHooksImport(true));
+
+    const mutationOptionsType = this.convertName(node.name?.value ?? "", {
+      suffix: "MutationOptions",
+      useTypesPrefix: false,
+    });
+
+    return `export type ${mutationOptionsType} = ApolloReactHooks.useMutation.Options<${operationResultType}, ${operationVariablesTypes}>;`;
+  }
+
+  private _buildRefetchFn(
+    node: OperationDefinitionNode,
+    documentVariableName: string,
+    operationType: string,
+    operationVariablesTypes: string
+  ): string {
+    if (node.operation !== "query") {
+      return "";
+    }
+
+    const nodeName = node.name?.value ?? "";
+    const operationName: string =
+      this.convertName(nodeName, {
+        suffix: this._getHookSuffix(nodeName, operationType),
+        useTypesPrefix: false,
+      }) + this.config.hooksSuffix;
+
+    const optional = hasRequiredVariables(node) ? "" : "?";
+
+    return `export function refetch${operationName}(variables${optional}: ${operationVariablesTypes}) {
+      return { query: ${this.getDocumentNodeVariable(
+        node,
+        documentVariableName
+      )}, variables: variables }
+    }`;
+  }
+
+  protected buildOperation(
+    node: OperationDefinitionNode,
+    documentVariableName: string,
+    operationType: string,
+    operationResultType: string,
+    operationVariablesTypes: string,
+    hasRequiredVariables: boolean
+  ): string {
+    operationResultType = this._externalImportPrefix + operationResultType;
+    operationVariablesTypes =
+      this._externalImportPrefix + operationVariablesTypes;
+
+    const mutationFn = this.config.withMutationFn
+      ? this._buildMutationFn(
+          node,
+          operationResultType,
+          operationVariablesTypes
+        )
+      : null;
+    const hooks = this._buildHooks(
+      node,
+      operationType,
+      documentVariableName,
+      operationResultType,
+      operationVariablesTypes,
+      hasRequiredVariables
+    );
+    const resultType = this.config.withResultType
+      ? this._buildResultType(
+          node,
+          operationType,
+          operationResultType,
+          operationVariablesTypes
+        )
+      : null;
+    const mutationOptionsType = this.config.withMutationOptionsType
+      ? this._buildWithMutationOptionsType(
+          node,
+          operationResultType,
+          operationVariablesTypes
+        )
+      : null;
+    const refetchFn = this.config.withRefetchFn
+      ? this._buildRefetchFn(
+          node,
+          documentVariableName,
+          operationType,
+          operationVariablesTypes
+        )
+      : null;
+
+    return [mutationFn, hooks, resultType, mutationOptionsType, refetchFn]
+      .filter((a) => a)
+      .join("\n");
+  }
+
+  public get fragments(): string {
+    const fragments = super.fragments;
+
+    if (this["_fragments"].length === 0 || !this.config.withFragmentHooks) {
+      return fragments;
+    }
+
+    const operationType = "Fragment";
+
+    const hookFns: string[] = [fragments];
+
+    for (const fragment of this["_fragments"].values()) {
+      if (fragment.isExternal) {
+        continue;
+      }
+
+      const nodeName = fragment.name ?? "";
+      const suffix = this._getHookSuffix(nodeName, operationType);
+      const fragmentName: string =
+        this.convertName(nodeName, {
+          suffix,
+          useTypesPrefix: false,
+          useTypesSuffix: false,
+        }) + this.config.hooksSuffix;
+
+      const operationTypeSuffix: string = this.getOperationSuffix(
+        fragmentName,
+        operationType
+      );
+
+      const operationResultType: string = this.convertName(nodeName, {
+        suffix: operationTypeSuffix + this._parsedConfig.operationResultSuffix,
+      });
+
+      const IDType = this.scalars.ID ?? "string";
+
+      const hook = `export function use${fragmentName}<F = { id: ${IDType} }>(identifiers: F) {
+  return ApolloReactHooks.use${operationType}<${operationResultType}>({
+    fragment: ${nodeName}${this.config.fragmentVariableSuffix},
+    fragmentName: "${nodeName}",
+    from: {
+      __typename: "${fragment.onType}",
+      ...identifiers,
+    },
+  });
+}`;
+
+      const hookResults = [
+        `export type ${fragmentName}HookResult = ReturnType<typeof use${fragmentName}>;`,
+      ];
+
+      hookFns.push([hook, hookResults].join("\n"));
+    }
+
+    return hookFns.join("\n");
+  }
+}
