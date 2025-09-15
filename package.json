@@ -64,7 +64,6 @@
     "prepublish": "pnpm run build"
   },
   "publishConfig": {
-    "directory": "dist",
     "access": "public"
   }
 }
