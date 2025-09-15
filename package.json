@@ -54,7 +54,6 @@
     "build": "pnpm run build:cjs && npm run build:esm && npm run build:types",
     "prepublish": "pnpm run build"
   },
-  "packageManager": "pnpm@10.8.0",
   "publishConfig": {
     "directory": "dist",
     "access": "public"
