@@ -264,7 +264,7 @@ export class ReactApolloVisitor extends ClientSideBaseVisitor<
 
       hookFns.push(
         `export function use${suspenseOperationName}(baseOptions?: ApolloReactHooks.SkipToken | ApolloReactHooks.useSuspenseQuery.Options<${operationVariablesTypes}>) {
-          const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : {...defaultOptions, ...baseOptions} as ApolloReactHooks.useSuspenseQuery.Options<${operationVariablesTypes}>;
           return ApolloReactHooks.useSuspenseQuery<${operationResultType}, ${operationVariablesTypes}>(${this.getDocumentNodeVariable(
           node,
           documentVariableName
