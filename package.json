@@ -1,6 +1,6 @@
 {
   "name": "graphql-codegen-typescript-react-apollo-4",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "Fork of @graphql-codegen/typescript-react-apollo with support for Apollo Client 4",
   "license": "MIT",
