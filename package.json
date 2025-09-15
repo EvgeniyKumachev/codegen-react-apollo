@@ -5,6 +5,9 @@
   "description": "Fork of @graphql-codegen/typescript-react-apollo with support for Apollo Client 4",
   "license": "MIT",
   "author": "EvgeniyKumachev",
+  "repository": {
+    "url": "https://github.com/EvgeniyKumachev/codegen-react-apollo"
+  },
   "engines": {
     "node": ">= 16.0.0"
   },
