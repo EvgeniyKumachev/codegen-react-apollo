@@ -1,5 +1,5 @@
 {
-  "name": "graphql-codegen-typescript-react-apollo-v4",
+  "name": "graphql-codegen-typescript-react-apollo-4",
   "version": "1.0.0",
   "type": "module",
   "description": "Fork of @graphql-codegen/typescript-react-apollo with support for Apollo Client 4",
@@ -9,7 +9,7 @@
     "url": "https://github.com/EvgeniyKumachev/codegen-react-apollo"
   },
   "engines": {
-    "node": ">= 16.0.0"
+    "node": ">= 20.0.0"
   },
   "exports": {
     ".": {

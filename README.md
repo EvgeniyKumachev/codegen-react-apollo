@@ -1,4 +1,4 @@
-# graphql-codegen-typescript-react-apollo-v4
+# graphql-codegen-typescript-react-apollo-4
 
 > Fork of `@graphql-codegen/typescript-react-apollo` with (basic) Apollo Client v4 compatibility. Focus: keep existing DX while you migrate to `@apollo/client` v4. **Not a drop‑in replacement for new v4 type features (notably `dataState`).**
 
@@ -58,11 +58,11 @@ If you depend on precise narrowing (e.g. wanting a compiler error when using a f
 ## Installation
 
 ```bash
-pnpm add -D graphql-codegen-typescript-react-apollo-v4
+pnpm add -D graphql-codegen-typescript-react-apollo-4
 # or
-npm i -D graphql-codegen-typescript-react-apollo-v4
+npm i -D graphql-codegen-typescript-react-apollo-4
 # or
-yarn add -D graphql-codegen-typescript-react-apollo-v4
+yarn add -D graphql-codegen-typescript-react-apollo-4
 ```
 
 Peer deps you must already have:
@@ -84,7 +84,7 @@ generates:
     plugins:
       - typescript
       - typescript-operations
-      - graphql-codegen-typescript-react-apollo-v4 # <- this fork
+      - graphql-codegen-typescript-react-apollo-4 # <- this fork
 ```
 
 Import & use:
